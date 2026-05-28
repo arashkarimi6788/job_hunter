@@ -1,10 +1,11 @@
 """
-scraper.py — Fetches job listings from Stepstone, Indeed, and LinkedIn.
+scraper.py — Fetches job listings via two strategies:
 
-Uses SerpAPI (free tier: 100 searches/month) to get structured results
-without triggering bot-detection on job sites.
+  Strategy A (primary): SerpAPI Google Jobs — structured, reliable
+  Strategy B (fallback): Direct Indeed RSS + Arbeitsagentur API — no key needed
 
-Free SerpAPI key: https://serpapi.com/  (100 free searches/month)
+If SERPAPI_KEY is set → uses Strategy A for best results.
+If not set           → uses Strategy B (free, no limits, no key required).
 """
 
 import os
@@ -12,164 +13,247 @@ import time
 import json
 import logging
 import requests
+import urllib.parse
 from datetime import datetime
-from typing import Optional
-from config import PROFESSIONAL_QUERIES, GENERAL_QUERIES, PLATFORMS, JOB_PREFERENCES, CANDIDATE
+from xml.etree import ElementTree as ET
+
+from config import PROFESSIONAL_QUERIES, GENERAL_QUERIES, CANDIDATE
 
 logger = logging.getLogger(__name__)
 
-SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
-SERPAPI_URL = "https://serpapi.com/search"
+SERPAPI_KEY  = os.environ.get("SERPAPI_KEY", "").strip()
+SERPAPI_URL  = "https://serpapi.com/search"
+HEADERS      = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
-# ─────────────────────────────────────────────
-#  Core fetcher
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+#  Strategy A — SerpAPI  (best quality, needs free API key)
+# ─────────────────────────────────────────────────────────────
 
-def fetch_jobs_serpapi(query: str, location: str = "Aachen, Germany", num: int = 10) -> list[dict]:
-    """
-    Fetch job listings using SerpAPI Google Jobs endpoint.
-    Falls back to mock data if no API key is configured (for testing).
-    """
-    if not SERPAPI_KEY:
-        logger.warning("No SERPAPI_KEY found — using mock data for testing.")
-        return _mock_jobs(query, location)
-
+def fetch_via_serpapi(query: str, location: str, num: int = 8) -> list[dict]:
     params = {
-        "engine": "google_jobs",
-        "q": query,
+        "engine":   "google_jobs",
+        "q":        query,
         "location": location,
-        "hl": "en",
-        "gl": "de",
-        "api_key": SERPAPI_KEY,
-        "num": num,
+        "hl":       "en",
+        "gl":       "de",
+        "api_key":  SERPAPI_KEY,
+        "num":      num,
     }
-
     try:
-        resp = requests.get(SERPAPI_URL, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-        jobs = data.get("jobs_results", [])
-        logger.info(f"  SerpAPI → '{query}': {len(jobs)} results")
-        return [_normalize(j) for j in jobs]
-    except requests.RequestException as e:
-        logger.error(f"  SerpAPI error for '{query}': {e}")
+        r = requests.get(SERPAPI_URL, params=params, timeout=15)
+        r.raise_for_status()
+        jobs = r.json().get("jobs_results", [])
+        logger.info(f"  SerpAPI '{query}': {len(jobs)} results")
+        return [_norm_serpapi(j) for j in jobs]
+    except Exception as e:
+        logger.warning(f"  SerpAPI failed for '{query}': {e}")
         return []
 
 
-def _normalize(raw: dict) -> dict:
-    """Convert SerpAPI job result to our standard format."""
+def _norm_serpapi(raw: dict) -> dict:
+    url = ""
+    for opt in raw.get("apply_options", []):
+        link = opt.get("link", "")
+        if any(p in link.lower() for p in ["stepstone", "indeed", "linkedin"]):
+            url = link
+            break
+    if not url and raw.get("apply_options"):
+        url = raw["apply_options"][0].get("link", "")
+
+    src = "Google Jobs"
+    for p in ["stepstone", "indeed", "linkedin"]:
+        if p in url.lower():
+            src = p.capitalize()
+            break
+
     return {
-        "title": raw.get("title", ""),
-        "company": raw.get("company_name", ""),
-        "location": raw.get("location", ""),
-        "description": raw.get("description", "")[:800],  # truncate for Claude
-        "posted": raw.get("detected_extensions", {}).get("posted_at", ""),
-        "employment_type": raw.get("detected_extensions", {}).get("schedule_type", ""),
-        "apply_url": _extract_url(raw),
-        "source": _detect_source(raw),
-        "thumbnail": raw.get("thumbnail", ""),
-        "scraped_at": datetime.utcnow().isoformat(),
+        "title":           raw.get("title", ""),
+        "company":         raw.get("company_name", ""),
+        "location":        raw.get("location", ""),
+        "description":     raw.get("description", "")[:800],
+        "posted":          raw.get("detected_extensions", {}).get("posted_at", ""),
+        "employment_type": raw.get("detected_extensions", {}).get("schedule_type", "Part-time"),
+        "apply_url":       url,
+        "source":          src,
+        "scraped_at":      datetime.utcnow().isoformat(),
     }
 
 
-def _extract_url(raw: dict) -> str:
-    """Extract the best apply URL from a SerpAPI job result."""
-    # Try apply options first
-    apply_options = raw.get("apply_options", [])
-    if apply_options:
-        # Prefer Stepstone, Indeed, LinkedIn
-        for preferred in ["stepstone", "indeed", "linkedin"]:
-            for opt in apply_options:
-                if preferred in opt.get("link", "").lower():
-                    return opt["link"]
-        return apply_options[0].get("link", "")
+# ─────────────────────────────────────────────────────────────
+#  Strategy B — Bundesagentur für Arbeit (BA) REST API
+#  Free, official German job portal, no key needed.
+#  Docs: https://jobsuche.api.bund.dev/
+# ─────────────────────────────────────────────────────────────
 
-    # Fallback: job_id Google link
-    job_id = raw.get("job_id", "")
-    if job_id:
-        return f"https://www.google.com/search?q={job_id}"
+BA_URL = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs"
+BA_AUTH = "jobboerse-jobsuche"          # public OAuth token for the open API
 
-    return ""
+def fetch_via_arbeitsagentur(query: str, location: str = "Aachen", num: int = 8) -> list[dict]:
+    """
+    Query the official Bundesagentur für Arbeit job search API.
+    This is a real, public REST API — no key required.
+    """
+    params = {
+        "was":      query,          # job title / keywords
+        "wo":       location,       # location
+        "umkreis":  50,             # radius in km
+        "arbeitszeit": "TEILZEIT",  # part-time filter
+        "size":     num,
+        "page":     1,
+    }
+    headers = {
+        "X-API-Key": BA_AUTH,
+        "Accept":    "application/json",
+        "User-Agent": "Mozilla/5.0",
+    }
+    try:
+        r = requests.get(BA_URL, params=params, headers=headers, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        jobs_raw = data.get("stellenangebote") or []
+        logger.info(f"  Arbeitsagentur '{query}': {len(jobs_raw)} results")
+        return [_norm_ba(j) for j in jobs_raw]
+    except Exception as e:
+        logger.warning(f"  Arbeitsagentur failed for '{query}': {e}")
+        return []
 
 
-def _detect_source(raw: dict) -> str:
-    """Detect which platform the job came from."""
-    url = _extract_url(raw).lower()
-    if "stepstone" in url:
-        return "Stepstone"
-    if "indeed" in url:
-        return "Indeed"
-    if "linkedin" in url:
-        return "LinkedIn"
-    return "Google Jobs"
+def _norm_ba(raw: dict) -> dict:
+    ref = raw.get("refnr", "")
+    url = f"https://www.arbeitsagentur.de/jobsuche/jobdetail/{ref}" if ref else \
+          "https://www.arbeitsagentur.de/jobsuche/"
+
+    employer = raw.get("arbeitgeber", "")
+    title    = raw.get("titel", "")
+    ort      = raw.get("arbeitsort", {})
+    loc      = f"{ort.get('ort','')}, {ort.get('region','Germany')}".strip(", ")
+    desc     = raw.get("stellenbeschreibung") or \
+               f"{title} position at {employer} in {loc}. Part-time role listed on Bundesagentur für Arbeit."
+
+    return {
+        "title":           title,
+        "company":         employer,
+        "location":        loc,
+        "description":     str(desc)[:800],
+        "posted":          raw.get("eintrittsdatum", ""),
+        "employment_type": "Part-time (Teilzeit)",
+        "apply_url":       url,
+        "source":          "Bundesagentur für Arbeit",
+        "scraped_at":      datetime.utcnow().isoformat(),
+    }
 
 
-# ─────────────────────────────────────────────
-#  Main scrape function
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+#  Strategy C — Indeed RSS (secondary free fallback)
+# ─────────────────────────────────────────────────────────────
+
+def fetch_via_indeed_rss(query: str, location: str = "Aachen", num: int = 6) -> list[dict]:
+    """
+    Indeed exposes an RSS feed — no API key needed.
+    """
+    q   = urllib.parse.quote_plus(query)
+    loc = urllib.parse.quote_plus(location)
+    url = f"https://de.indeed.com/rss?q={q}&l={loc}&radius=50&sort=date&limit={num}&lang=en"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        items = root.findall(".//item")
+        logger.info(f"  Indeed RSS '{query}': {len(items)} results")
+        return [_norm_indeed_rss(i) for i in items]
+    except Exception as e:
+        logger.warning(f"  Indeed RSS failed for '{query}': {e}")
+        return []
+
+
+def _norm_indeed_rss(item) -> dict:
+    def _t(tag):
+        el = item.find(tag)
+        return el.text.strip() if el is not None and el.text else ""
+
+    desc_raw = _t("description")
+    # strip basic HTML tags from RSS description
+    import re
+    desc = re.sub(r"<[^>]+>", " ", desc_raw).strip()[:800]
+
+    return {
+        "title":           _t("title"),
+        "company":         _t("{com.indeed}employer"),
+        "location":        _t("{com.indeed}city") or "Aachen, NRW",
+        "description":     desc,
+        "posted":          _t("pubDate"),
+        "employment_type": "Part-time",
+        "apply_url":       _t("link"),
+        "source":          "Indeed",
+        "scraped_at":      datetime.utcnow().isoformat(),
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+#  Main scrape orchestrator
+# ─────────────────────────────────────────────────────────────
 
 def scrape_all_jobs() -> dict:
     """
-    Run all search queries and return categorized job listings.
-    Returns: {"professional": [...], "general": [...]}
+    Run all queries and return {"professional": [...], "general": [...]}.
+    Automatically picks the best available strategy.
     """
-    location = f"{CANDIDATE['location']}, {CANDIDATE['region']}"
+    location = "Aachen, Germany"        # keep short for SerpAPI compatibility
+    use_serpapi = bool(SERPAPI_KEY)
+
+    if use_serpapi:
+        logger.info("Strategy: SerpAPI (API key found)")
+    else:
+        logger.info("Strategy: Bundesagentur für Arbeit + Indeed RSS (no SerpAPI key — free mode)")
+
     results = {"professional": [], "general": []}
 
+    # ── Professional queries ──────────────────────────────────
     logger.info("=== Scraping PROFESSIONAL jobs ===")
-    seen_titles = set()
+    seen = set()
     for query in PROFESSIONAL_QUERIES:
-        jobs = fetch_jobs_serpapi(query, location=location, num=5)
+        if use_serpapi:
+            jobs = fetch_via_serpapi(query, location=location, num=6)
+        else:
+            jobs  = fetch_via_arbeitsagentur(query, location="Aachen", num=6)
+            jobs += fetch_via_indeed_rss(query, location="Aachen", num=4)
+
         for job in jobs:
             key = f"{job['title'].lower()}|{job['company'].lower()}"
-            if key not in seen_titles and job["title"]:
-                seen_titles.add(key)
+            if key not in seen and job["title"]:
+                seen.add(key)
                 job["category"] = "professional"
                 results["professional"].append(job)
-        time.sleep(1.2)   # be polite to the API
+        time.sleep(1.0)
 
+    # ── General queries ───────────────────────────────────────
     logger.info("=== Scraping GENERAL jobs ===")
-    seen_titles_g = set()
+    seen_g = set()
     for query in GENERAL_QUERIES:
-        jobs = fetch_jobs_serpapi(query, location=location, num=5)
+        if use_serpapi:
+            jobs = fetch_via_serpapi(query, location=location, num=6)
+        else:
+            jobs  = fetch_via_arbeitsagentur(query, location="Aachen", num=6)
+            jobs += fetch_via_indeed_rss(query, location="Aachen", num=4)
+
         for job in jobs:
             key = f"{job['title'].lower()}|{job['company'].lower()}"
-            if key not in seen_titles_g and job["title"]:
-                seen_titles_g.add(key)
+            if key not in seen_g and job["title"]:
+                seen_g.add(key)
                 job["category"] = "general"
                 results["general"].append(job)
-        time.sleep(1.2)
+        time.sleep(1.0)
 
     logger.info(
-        f"Scraping done: {len(results['professional'])} professional, "
-        f"{len(results['general'])} general jobs found."
+        f"Total scraped: {len(results['professional'])} professional, "
+        f"{len(results['general'])} general"
     )
     return results
-
-
-# ─────────────────────────────────────────────
-#  Mock data (used when no API key is set)
-# ─────────────────────────────────────────────
-
-def _mock_jobs(query: str, location: str) -> list[dict]:
-    """Return mock job data for testing without an API key."""
-    return [
-        {
-            "title": f"[MOCK] Working Student – {query.title()}",
-            "company": "Example GmbH",
-            "location": location,
-            "description": (
-                f"This is a mock job listing for query '{query}'. "
-                "In production, real listings will appear here from Stepstone, Indeed, and LinkedIn. "
-                "Skills required: Python, machine learning, English fluency."
-            ),
-            "posted": "1 day ago",
-            "employment_type": "Part-time",
-            "apply_url": "https://de.indeed.com/jobs?q=working+student+it+aachen",
-            "source": "Mock Data",
-            "thumbnail": "",
-            "scraped_at": datetime.utcnow().isoformat(),
-            "category": "professional",
-        }
-    ]

@@ -8,7 +8,7 @@
 CANDIDATE = {
     "name": "Arash Karimi",
     "location": "Aachen, Germany",
-    "region": "Nordrhein-Westfalen (NRW)",
+    "region": "Nordrhein-Westfalen",
     "current_study": "MSc Human-Centered Intelligent Systems, RWTH Aachen",
     "languages": {"English": "C1", "German": "A2", "Persian": "Native"},
     "work_permit": "EU student — eligible for Werkstudent (20 hrs/week during semester)",
