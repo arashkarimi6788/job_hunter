@@ -1,22 +1,26 @@
-name: Daily Job Hunter 🔍
+﻿name: Daily Job Hunter
 
 on:
   schedule:
     - cron: '0 11 * * *'
   workflow_dispatch:
 
+concurrency:
+  group: job-hunter
+  cancel-in-progress: true
+
 jobs:
   hunt-jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      workflows: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -45,21 +49,15 @@ jobs:
         run: |
           echo "=== output/reports/ ==="
           ls -lah output/reports/ || echo "empty"
-          echo "=== docs/ ==="
-          ls -lah docs/ || echo "empty"
 
       - name: Commit and push reports
         run: |
           git config --local user.email "job-hunter-bot@github-actions"
           git config --local user.name "Job Hunter Bot"
-          # Stage ONLY report files — never the workflow file
           git add output/reports/ docs/
           if git diff --staged --quiet; then
-            echo "Nothing to commit."
+            echo "Nothing new to commit."
           else
-            git commit -m "📋 Daily job report - $(date +'%Y-%m-%d %H:%M UTC')"
-            # Pull remote changes then push
-            git fetch origin main
-            git rebase origin/main
+            git commit -m "Daily job report - $(date +'%Y-%m-%d %H:%M UTC')"
             git push origin main
           fi
