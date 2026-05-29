@@ -37,7 +37,15 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-        run: python job_scraper/main.py
+        working-directory: ./job_scraper    # ← run from inside job_scraper/ so imports work
+        run: python main.py
+
+      - name: Show generated files
+        run: |
+          echo "=== Files in output/reports/ ==="
+          ls -lah output/reports/ || echo "Directory empty or missing"
+          echo "=== Files in docs/ ==="
+          ls -lah docs/ || echo "Directory empty or missing"
 
       - name: Commit and push reports
         uses: stefanzweifel/git-auto-commit-action@v5
