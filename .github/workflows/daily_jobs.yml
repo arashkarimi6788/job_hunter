@@ -15,8 +15,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0        # full history so rebase always works
-          ref: main             # always check out the very latest main
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -41,14 +40,10 @@ jobs:
         run: python job_scraper/main.py
 
       - name: Commit and push reports
-        run: |
-          git config --local user.email "job-hunter-bot@github-actions"
-          git config --local user.name "Job Hunter Bot"
-          git add output/reports/ docs/
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "📋 Daily job report - $(date +'%Y-%m-%d %H:%M UTC')"
-            git pull --rebase=true origin main
-            git push origin main
-          fi
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "📋 Daily job report - ${{ github.run_number }}"
+          file_pattern: "output/reports/* docs/*"
+          commit_user_name: "Job Hunter Bot"
+          commit_user_email: "job-hunter-bot@github-actions"
+          push_options: "--force-with-lease"
