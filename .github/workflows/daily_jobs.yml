@@ -2,19 +2,21 @@ name: Daily Job Hunter 🔍
 
 on:
   schedule:
-    # Runs every day at 12:00 PM UTC (adjust if you want local CET: use 11:00 for CET, 10:00 for CEST)
     - cron: '0 11 * * *'
-  workflow_dispatch:   # allows manual trigger from GitHub UI anytime
+  workflow_dispatch:
 
 jobs:
   hunt-jobs:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to commit the report back to the repo
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history so rebase always works
+          ref: main             # always check out the very latest main
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -43,6 +45,10 @@ jobs:
           git config --local user.email "job-hunter-bot@github-actions"
           git config --local user.name "Job Hunter Bot"
           git add output/reports/ docs/
-          git diff --staged --quiet || git commit -m "📋 Daily job report - $(date +'%Y-%m-%d %H:%M UTC')"
-          git pull --rebase origin main
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "📋 Daily job report - $(date +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase=true origin main
+            git push origin main
+          fi
