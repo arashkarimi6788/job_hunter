@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      workflows: write
 
     steps:
       - name: Checkout repository
@@ -37,21 +38,28 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-        working-directory: ./job_scraper    # ← run from inside job_scraper/ so imports work
+        working-directory: ./job_scraper
         run: python main.py
 
       - name: Show generated files
         run: |
-          echo "=== Files in output/reports/ ==="
-          ls -lah output/reports/ || echo "Directory empty or missing"
-          echo "=== Files in docs/ ==="
-          ls -lah docs/ || echo "Directory empty or missing"
+          echo "=== output/reports/ ==="
+          ls -lah output/reports/ || echo "empty"
+          echo "=== docs/ ==="
+          ls -lah docs/ || echo "empty"
 
       - name: Commit and push reports
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "📋 Daily job report - ${{ github.run_number }}"
-          file_pattern: "output/reports/* docs/*"
-          commit_user_name: "Job Hunter Bot"
-          commit_user_email: "job-hunter-bot@github-actions"
-          push_options: "--force-with-lease"
+        run: |
+          git config --local user.email "job-hunter-bot@github-actions"
+          git config --local user.name "Job Hunter Bot"
+          # Stage ONLY report files — never the workflow file
+          git add output/reports/ docs/
+          if git diff --staged --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "📋 Daily job report - $(date +'%Y-%m-%d %H:%M UTC')"
+            # Pull remote changes then push
+            git fetch origin main
+            git rebase origin/main
+            git push origin main
+          fi
