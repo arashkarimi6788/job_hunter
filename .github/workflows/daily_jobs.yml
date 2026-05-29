@@ -44,4 +44,5 @@ jobs:
           git config --local user.name "Job Hunter Bot"
           git add output/reports/ docs/
           git diff --staged --quiet || git commit -m "📋 Daily job report - $(date +'%Y-%m-%d %H:%M UTC')"
+          git pull --rebase origin main
           git push
