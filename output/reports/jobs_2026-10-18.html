@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Job Hunter — 2026-10-18</title>
+  <style>
+    :root {
+      --blue: #1F497D; --green: #1F6F3A; --purple: #7D3C98;
+      --red: #C0392B; --gold: #D4AC0D; --light: #F4F6F9;
+      --border: #DDE3ED; --text: #2C3E50; --muted: #7F8C8D;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--light);
+            color: var(--text); line-height: 1.6; }
+    header { background: var(--blue); color: #fff; padding: 28px 40px; }
+    header h1 { font-size: 1.8rem; margin-bottom: 4px; }
+    header p { opacity: .8; font-size: .9rem; }
+    .stats { display: flex; gap: 16px; padding: 20px 40px;
+              background: #fff; border-bottom: 1px solid var(--border);
+              flex-wrap: wrap; }
+    .stat-box { background: var(--light); border-radius: 8px; padding: 12px 20px;
+                 text-align: center; min-width: 120px; }
+    .stat-box .num { font-size: 1.6rem; font-weight: 700; color: var(--blue); }
+    .stat-box .lbl { font-size: .75rem; color: var(--muted); text-transform: uppercase; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
+    .section-title { font-size: 1.3rem; font-weight: 700; padding: 12px 0 4px;
+                      border-bottom: 3px solid var(--blue); margin-bottom: 20px; }
+    .section-title.gen { border-color: var(--green); color: var(--green); }
+    .section-title.pro { color: var(--blue); }
+    .card { background: #fff; border: 1px solid var(--border); border-radius: 10px;
+             padding: 20px 24px; margin-bottom: 16px;
+             box-shadow: 0 2px 6px rgba(0,0,0,.05); transition: box-shadow .2s; }
+    .card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.10); }
+    .card-header { display: flex; justify-content: space-between;
+                    align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+    .job-title { font-size: 1.05rem; font-weight: 700; color: var(--blue); }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .badge { border-radius: 20px; padding: 2px 10px; font-size: .78rem;
+              font-weight: 600; white-space: nowrap; }
+    .badge-apply  { background: #D5F5E3; color: #1A7A3A; }
+    .badge-consider { background: #FEF9E7; color: #9A7D0A; }
+    .badge-skip   { background: #FDEDEC; color: #A93226; }
+    .badge-score  { background: #EAF2FB; color: var(--blue); }
+    .badge-source { background: #F4ECF7; color: var(--purple); }
+    .meta { font-size: .83rem; color: var(--muted); margin: 6px 0 10px; }
+    .meta span { margin-right: 14px; }
+    .section-label { font-size: .78rem; font-weight: 700; text-transform: uppercase;
+                      letter-spacing: .04em; margin-top: 10px; margin-bottom: 2px; }
+    .section-label.match { color: var(--green); }
+    .section-label.concern { color: var(--red); }
+    .section-label.tip { color: var(--purple); }
+    .section-label.desc { color: var(--text); }
+    .desc-text { font-size: .88rem; color: #444; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .tag { background: var(--light); border: 1px solid var(--border);
+            border-radius: 4px; padding: 1px 8px; font-size: .78rem; }
+    .apply-btn { display: inline-block; margin-top: 12px; background: var(--blue);
+                  color: #fff; padding: 7px 18px; border-radius: 6px;
+                  text-decoration: none; font-size: .85rem; font-weight: 600; }
+    .apply-btn:hover { background: #16335A; }
+    .apply-btn.gen { background: var(--green); }
+    .apply-btn.gen:hover { background: #155228; }
+    footer { text-align: center; padding: 30px; color: var(--muted); font-size: .82rem;
+              border-top: 1px solid var(--border); background: #fff; margin-top: 20px; }
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-btn { border: 1px solid var(--border); background: #fff; border-radius: 20px;
+                   padding: 5px 14px; cursor: pointer; font-size: .83rem; transition: all .2s; }
+    .filter-btn.active, .filter-btn:hover { background: var(--blue); color: #fff;
+                                              border-color: var(--blue); }
+    @media(max-width:600px) { header { padding: 16px 18px; }
+      .stats { padding: 12px 18px; } .container { padding: 16px 12px; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔍 Daily Job Hunt Report</h1>
+  <p>October 18, 2026 — 14:27 UTC &nbsp;·&nbsp; Arash Karimi &nbsp;·&nbsp; Aachen, NRW, Germany</p>
+</header>
+
+<div class="stats">
+  <div class="stat-box"><div class="num">0</div><div class="lbl">Total Jobs</div></div>
+  <div class="stat-box"><div class="num">0</div><div class="lbl">Professional</div></div>
+  <div class="stat-box"><div class="num">0</div><div class="lbl">General</div></div>
+  <div class="stat-box" style="border-left:4px solid #1A7A3A">
+    <div class="num" style="color:#1A7A3A">0</div>
+    <div class="lbl">Apply Now</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="filterJobs('all')">All Jobs</button>
+    <button class="filter-btn" onclick="filterJobs('APPLY')">✅ Apply</button>
+    <button class="filter-btn" onclick="filterJobs('CONSIDER')">🟡 Consider</button>
+    <button class="filter-btn" onclick="filterJobs('pro')">Professional</button>
+    <button class="filter-btn" onclick="filterJobs('gen')">General</button>
+  </div>
+
+  <div class="section-title pro">📋 Category 1 — Professional Part-Time Jobs</div>
+  <div id="pro-jobs"></div>
+
+  <div class="section-title gen" style="margin-top:30px">📦 Category 2 — General Part-Time Jobs</div>
+  <div id="gen-jobs"></div>
+
+</div>
+
+<footer>
+  Generated automatically every day at 12:00 PM UTC by
+  <strong>Job Hunter Bot</strong> powered by <strong>Claude (Anthropic)</strong>
+  &nbsp;·&nbsp; Report date: 2026-10-18
+  &nbsp;·&nbsp;
+  <a href="jobs_2026-10-18.docx" style="color:var(--blue)">⬇ Download Word (.docx)</a>
+</footer>
+
+<script>
+function filterJobs(filter) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.card').forEach(card => {
+    if (filter === 'all') { card.style.display = ''; return; }
+    if (filter === 'pro') { card.style.display = card.dataset.cat === 'pro' ? '' : 'none'; return; }
+    if (filter === 'gen') { card.style.display = card.dataset.cat === 'gen' ? '' : 'none'; return; }
+    card.style.display = card.dataset.rec === filter ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>
